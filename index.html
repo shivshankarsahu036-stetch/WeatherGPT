@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeatherGPT - Conversational AI & Meteorological Decision Support</title>
+    <meta name="description" content="AI-Powered Meteorological Decision Support, Early Warning Dissemination, and Multilingual NWP Weather Intelligence">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdfa',
+                            100: '#ccfbf1',
+                            400: '#2dd4bf',
+                            500: '#14b8a6',
+                            600: '#0d9488',
+                            900: '#134e4a',
+                        },
+                        meteor: {
+                            dark: '#0b1120',
+                            card: '#162444',
+                            cyan: '#00e5ff',
+                            blue: '#38bdf8',
+                            amber: '#f59e0b',
+                            rose: '#f43f5e',
+                            emerald: '#10b981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Leaflet.js for GIS Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Chart.js for NWP & Climate Graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Marked.js for Markdown Formatting in Chat -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="text-slate-100 flex flex-col min-h-screen">
+
+    <!-- TOP ANNOUNCEMENT / SEVERE WEATHER WARNING BANNER -->
+    <div id="alertBanner" class="hidden bg-gradient-to-r from-rose-900/90 via-red-800/90 to-amber-900/90 border-b border-rose-500/30 px-4 py-2 text-xs md:text-sm font-medium transition-all duration-300">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2 overflow-hidden text-rose-100">
+                <span class="flex h-2.5 w-2.5 relative flex-shrink-0">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                </span>
+                <i class="fa-solid fa-triangle-exclamation text-amber-300"></i>
+                <span class="font-bold text-amber-200 uppercase tracking-wide" id="alertBannerBadge">WARNING:</span>
+                <span class="truncate" id="alertBannerText">Checking meteorological warnings...</span>
+            </div>
+            <button onclick="document.getElementById('alertBanner').classList.add('hidden')" class="text-slate-300 hover:text-white px-2 py-0.5 rounded bg-black/20 text-xs">
+                Dismiss <i class="fa-solid fa-xmark ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN HEADER -->
+    <header class="sticky top-0 z-40 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/80 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Branding -->
+            <div class="flex items-center gap-3">
+                <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-cloud-bolt text-lg"></i>
+                    <span class="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                    </span>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-300">
+                            WeatherGPT
+                        </h1>
+                        <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                            AI v2.5
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 hidden sm:block">Conversational AI & NWP Early Warning Dissemination</p>
+                </div>
+            </div>
+
+            <!-- Global Search & Geolocation -->
+            <div class="flex-1 max-w-md mx-2">
+                <div class="relative flex items-center">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 text-slate-400 text-xs"></i>
+                    <input type="text" id="citySearchInput" placeholder="Search city or district (e.g., Mumbai, Delhi, London)..."
+                        class="w-full bg-slate-900/90 border border-slate-700/80 focus:border-cyan-400 rounded-lg pl-9 pr-20 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 transition shadow-inner">
+                    <div class="absolute right-1 flex items-center gap-1">
+                        <button id="locateBtn" title="Detect My Location" class="p-1.5 text-slate-400 hover:text-cyan-400 rounded hover:bg-slate-800 text-xs transition">
+                            <i class="fa-solid fa-location-crosshairs"></i>
+                        </button>
+                        <button id="searchBtn" class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-semibold transition">
+                            Search
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Controls: Backend Status, Multilingual Selector, Clock -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Backend Connection Pill -->
+                <div id="backendStatusPill" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] bg-slate-900 border border-slate-700/60" title="Checking API status">
+                    <span class="h-2 w-2 rounded-full bg-amber-400 animate-pulse" id="statusDot"></span>
+                    <span class="text-slate-300 font-mono text-[10px]" id="statusText">Checking...</span>
+                </div>
+
+                <!-- Multilingual Switcher -->
+                <div class="relative">
+                    <select id="languageSelector" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-400 cursor-pointer">
+                        <option value="en">English (EN)</option>
+                        <option value="hi">हिन्दी (Hindi)</option>
+                        <option value="bn">বাংলা (Bengali)</option>
+                        <option value="te">తెలుగు (Telugu)</option>
+                        <option value="ta">தமிழ் (Tamil)</option>
+                        <option value="mr">मराठी (Marathi)</option>
+                        <option value="gu">ગુજરાતી (Gujarati)</option>
+                    </select>
+                </div>
+
+                <!-- Rural Voice Assistant Shortcut -->
+                <button id="quickVoiceBtn" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md shadow-emerald-900/30 transition">
+                    <i class="fa-solid fa-microphone"></i>
+                    <span class="hidden md:inline" id="voiceBtnLabel">Voice AI</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Popular City Quick Chips -->
+        <div class="max-w-7xl mx-auto flex items-center gap-1.5 mt-2.5 overflow-x-auto pb-1 text-[11px] scrollbar-none text-slate-400">
+            <span class="text-slate-500 font-medium whitespace-nowrap"><i class="fa-solid fa-fire text-amber-500 mr-1"></i>Trending:</span>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Mumbai">Mumbai</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="New Delhi">New Delhi</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Bengaluru">Bengaluru</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Chennai">Chennai</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Kolkata">Kolkata</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Pune">Pune</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Ahmedabad">Ahmedabad</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Hyderabad">Hyderabad</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="London">London</button>
+            <button class="city-chip hover:text-cyan-300 hover:bg-slate-800 px-2 py-0.5 rounded bg-slate-900/60 border border-slate-800 whitespace-nowrap" data-city="Tokyo">Tokyo</button>
+        </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <div class="bg-slate-900/60 border-b border-slate-800 px-4 py-2">
+        <div class="max-w-7xl mx-auto flex items-center justify-between overflow-x-auto gap-2">
+            <nav class="flex items-center gap-1.5 sm:gap-2">
+                <button class="nav-tab active px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 border border-transparent transition" data-tab="chatTab">
+                    <i class="fa-solid fa-comments text-cyan-400"></i>
+                    <span>WeatherGPT AI</span>
+                </button>
+                <button class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 border border-transparent transition text-slate-400 hover:text-slate-200" data-tab="forecastTab">
+                    <i class="fa-solid fa-cloud-sun-rain text-amber-400"></i>
+                    <span>Live Forecast</span>
+                </button>
+                <button class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 border border-transparent transition text-slate-400 hover:text-slate-200" data-tab="gisMapTab">
+                    <i class="fa-solid fa-satellite-dish text-emerald-400"></i>
+                    <span>GIS & Radar Map</span>
+                </button>
+                <button class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 border border-transparent transition text-slate-400 hover:text-slate-200" data-tab="sectorTab">
+                    <i class="fa-solid fa-wheat-awn text-emerald-400"></i>
+                    <span>Sector Advisories</span>
+                </button>
+                <button class="nav-tab px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 border border-transparent transition text-slate-400 hover:text-slate-200" data-tab="climateTab">
+                    <i class="fa-solid fa-chart-line text-indigo-400"></i>
+                    <span>NWP & Climate Trends</span>
+                </button>
+            </nav>
+
+            <div class="hidden lg:flex items-center gap-2 text-slate-400 text-xs font-mono">
+                <i class="fa-regular fa-clock"></i>
+                <span id="liveClock">--:--:-- UTC</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-7xl mx-auto w-full p-4 flex-1">
+
+        <!-- ============================================================ -->
+        <!-- TAB 1: WEATHERGPT CONVERSATIONAL AI & VOICE INTERFACE -->
+        <!-- ============================================================ -->
+        <section id="chatTab" class="tab-pane block space-y-4">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                
+                <!-- Left Chat Sidebar: Sector Prompts & Capabilities -->
+                <div class="lg:col-span-1 space-y-4">
+                    
+                    <!-- Quick Summary Card -->
+                    <div class="glass-panel p-4 rounded-2xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs uppercase tracking-wider text-cyan-400 font-bold">Selected City</span>
+                            <span class="text-[10px] text-slate-400" id="chatCityCoordinates">19.07° N, 72.87° E</span>
+                        </div>
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2" id="chatCityName">
+                            <i class="fa-solid fa-location-dot text-rose-500"></i> Mumbai, IN
+                        </h2>
+                        <div class="mt-3 flex items-baseline justify-between">
+                            <span class="text-3xl font-extrabold text-cyan-300" id="chatCityTemp">29.5°C</span>
+                            <span class="text-xs text-slate-300 bg-slate-800/80 px-2 py-1 rounded" id="chatCityCond">Partly cloudy</span>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-slate-700/60 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                            <div><i class="fa-solid fa-droplet text-blue-400 mr-1"></i>Humidity: <span class="text-slate-200 font-semibold" id="chatCityHumidity">78%</span></div>
+                            <div><i class="fa-solid fa-wind text-teal-400 mr-1"></i>Wind: <span class="text-slate-200 font-semibold" id="chatCityWind">16 km/h</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Sector Prompt Quick Chips -->
+                    <div class="glass-panel p-4 rounded-2xl space-y-2.5">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles text-cyan-400"></i> Quick AI Queries
+                        </h3>
+                        <div class="space-y-1.5 text-xs">
+                            <button class="prompt-chip w-full text-left p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800 hover:border-emerald-500/40 text-slate-300 transition flex items-center gap-2">
+                                <span class="text-emerald-400 text-sm">🌾</span>
+                                <div>
+                                    <p class="font-semibold text-white">Farmer Agri Advisory</p>
+                                    <p class="text-[10px] text-slate-400">Sowing & irrigation forecast</p>
+                                </div>
+                            </button>
+                            <button class="prompt-chip w-full text-left p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800 hover:border-blue-500/40 text-slate-300 transition flex items-center gap-2">
+                                <span class="text-blue-400 text-sm">⚓</span>
+                                <div>
+                                    <p class="font-semibold text-white">Fishermen Sea Warning</p>
+                                    <p class="text-[10px] text-slate-400">Wave height & gale advisory</p>
+                                </div>
+                            </button>
+                            <button class="prompt-chip w-full text-left p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800 hover:border-sky-500/40 text-slate-300 transition flex items-center gap-2">
+                                <span class="text-sky-400 text-sm">✈️</span>
+                                <div>
+                                    <p class="font-semibold text-white">Aviation METAR Briefing</p>
+                                    <p class="text-[10px] text-slate-400">Crosswinds & visibility</p>
+                                </div>
+                            </button>
+                            <button class="prompt-chip w-full text-left p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800 hover:border-amber-500/40 text-slate-300 transition flex items-center gap-2">
+                                <span class="text-amber-400 text-sm">⚠️</span>
+                                <div>
+                                    <p class="font-semibold text-white">Extreme Weather Alert</p>
+                                    <p class="text-[10px] text-slate-400">Heatwave & flood risk</p>
+                                </div>
+                            </button>
+                            <button class="prompt-chip w-full text-left p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-800/90 border border-slate-800 hover:border-indigo-500/40 text-slate-300 transition flex items-center gap-2">
+                                <span class="text-indigo-400 text-sm">📊</span>
+                                <div>
+                                    <p class="font-semibold text-white">NWP Model Comparison</p>
+                                    <p class="text-[10px] text-slate-400">GFS vs ECMWF divergence</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Voice Accessibility Guide -->
+                    <div class="glass-panel p-3.5 rounded-2xl text-[11px] text-slate-400 space-y-1.5 border-l-4 border-emerald-500">
+                        <div class="font-semibold text-emerald-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-volume-high"></i> Voice & Rural Access
+                        </div>
+                        <p>Click the mic button to speak in Hindi or regional languages. Click the speaker icon on any reply to hear audio playback.</p>
+                    </div>
+
+                </div>
+
+                <!-- Right Main Chat Interface -->
+                <div class="lg:col-span-3 flex flex-col h-[650px] glass-panel rounded-2xl overflow-hidden border border-slate-800">
+                    
+                    <!-- Chat Header -->
+                    <div class="p-3.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs border border-cyan-500/30">
+                                AI
+                            </div>
+                            <div>
+                                <h3 class="text-xs font-bold text-white flex items-center gap-2">
+                                    WeatherGPT Conversational Intelligence
+                                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-normal">Active</span>
+                                </h3>
+                                <p class="text-[10px] text-slate-400">Ground truth powered by Open-Meteo & Gemini 2.5 Flash</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button id="clearChatBtn" class="p-1.5 text-slate-400 hover:text-slate-200 text-xs rounded hover:bg-slate-800" title="Clear Conversation">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                            <button id="ttsToggleBtn" class="p-1.5 text-cyan-400 hover:text-cyan-300 text-xs rounded hover:bg-slate-800" title="Auto Read Answers (Text-to-Speech)">
+                                <i class="fa-solid fa-volume-high"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages Flow -->
+                    <div id="chatMessages" class="flex-1 p-4 overflow-y-auto space-y-4">
+                        <!-- Welcome message added via JS -->
+                    </div>
+
+                    <!-- Voice Recording Indicator (Appears when listening) -->
+                    <div id="voiceListeningBar" class="hidden px-4 py-2 bg-emerald-950/80 border-t border-emerald-500/30 flex items-center justify-between text-xs text-emerald-200">
+                        <div class="flex items-center gap-3">
+                            <div class="flex items-center gap-1 h-5">
+                                <span class="wave-bar w-1 h-full bg-emerald-400 rounded-full"></span>
+                                <span class="wave-bar w-1 h-full bg-emerald-400 rounded-full"></span>
+                                <span class="wave-bar w-1 h-full bg-emerald-400 rounded-full"></span>
+                                <span class="wave-bar w-1 h-full bg-emerald-400 rounded-full"></span>
+                            </div>
+                            <span class="font-medium" id="voiceListeningStatus">Listening... Speak in your language (English, Hindi, etc.)</span>
+                        </div>
+                        <button id="cancelVoiceBtn" class="text-emerald-300 hover:text-white text-xs px-2 py-1 rounded bg-emerald-900/60">Stop</button>
+                    </div>
+
+                    <!-- Chat Input Bar -->
+                    <div class="p-3 bg-slate-900/90 border-t border-slate-800">
+                        <form id="chatForm" class="flex items-center gap-2">
+                            <button type="button" id="micBtn" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white flex items-center justify-center transition border border-slate-700" title="Click to Speak">
+                                <i class="fa-solid fa-microphone text-sm"></i>
+                            </button>
+                            <div class="relative flex-1">
+                                <input type="text" id="chatInput" placeholder="Ask about rainfall forecast, crop advisory, cyclone warning, aviation winds..."
+                                    class="w-full bg-slate-950 border border-slate-700/80 focus:border-cyan-400 rounded-xl px-4 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-400/50">
+                            </div>
+                            <button type="submit" id="sendChatBtn" class="w-10 h-10 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white flex items-center justify-center transition shadow-lg shadow-cyan-600/30">
+                                <i class="fa-solid fa-paper-plane text-xs"></i>
+                            </button>
+                        </form>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- TAB 2: LIVE METEOROLOGICAL FORECAST & OBSERVATIONS -->
+        <!-- ============================================================ -->
+        <section id="forecastTab" class="tab-pane hidden space-y-4">
+            
+            <!-- Hero Weather Card & Key Indicators -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                
+                <!-- Main Weather Card -->
+                <div class="lg:col-span-1 glass-panel p-6 rounded-2xl flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-slate-900/90 via-slate-850/80 to-blue-950/40">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-cyan-400" id="heroLocationTag">Current Station</span>
+                            <h2 class="text-2xl font-black text-white tracking-tight" id="heroCityName">Mumbai</h2>
+                            <p class="text-xs text-slate-400" id="heroRegionCountry">Maharashtra, India</p>
+                        </div>
+                        <div class="text-4xl text-cyan-400" id="heroWeatherIcon">
+                            <i class="fa-solid fa-cloud-sun"></i>
+                        </div>
+                    </div>
+
+                    <div class="my-6 flex items-baseline gap-4">
+                        <span class="text-6xl font-black tracking-tight text-white" id="heroTemp">30°</span>
+                        <div>
+                            <p class="text-sm font-semibold text-slate-200" id="heroCondition">Partly Cloudy</p>
+                            <p class="text-xs text-slate-400">Feels like <span id="heroFeelsLike">34°C</span></p>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-400">
+                        <span><i class="fa-solid fa-gauge-high mr-1 text-slate-500"></i>Pressure: <strong class="text-slate-200" id="heroPressure">1012 hPa</strong></span>
+                        <span><i class="fa-regular fa-clock mr-1 text-slate-500"></i>Updated: <strong class="text-slate-200" id="heroUpdateTime">Just now</strong></span>
+                    </div>
+                </div>
+
+                <!-- 8-Parameter Meteorological Metric Grid -->
+                <div class="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    
+                    <!-- Metric 1: Humidity -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Humidity</span>
+                            <i class="fa-solid fa-droplet text-blue-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-2xl font-bold text-white" id="metricHumidity">78%</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400" id="metricHumidityDesc">Normal tropical range</p>
+                    </div>
+
+                    <!-- Metric 2: Wind Speed -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Wind Speed</span>
+                            <i class="fa-solid fa-wind text-teal-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-2xl font-bold text-white" id="metricWindSpeed">16 km/h</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Gusts up to <span id="metricWindGust">22 km/h</span></p>
+                    </div>
+
+                    <!-- Metric 3: Air Quality (AQI) -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Air Quality</span>
+                            <i class="fa-solid fa-leaf text-emerald-400"></i>
+                        </div>
+                        <div class="my-2 flex items-center gap-2">
+                            <span class="text-2xl font-bold text-emerald-400" id="metricAQI">65</span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold" id="metricAQILabel">Moderate</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">PM2.5: <span id="metricPM25">18.4 µg/m³</span></p>
+                    </div>
+
+                    <!-- Metric 4: UV Index -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>UV Index</span>
+                            <i class="fa-solid fa-sun text-amber-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-2xl font-bold text-amber-400" id="metricUV">7.2</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400" id="metricUVDesc">High • Protection required</p>
+                    </div>
+
+                    <!-- Metric 5: Precipitation -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Rainfall (24h)</span>
+                            <i class="fa-solid fa-cloud-showers-heavy text-cyan-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-2xl font-bold text-white" id="metricPrecip">0.0 mm</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Probability: <span id="metricPrecipProb">15%</span></p>
+                    </div>
+
+                    <!-- Metric 6: Cloud Cover -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Cloud Cover</span>
+                            <i class="fa-solid fa-cloud text-slate-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-2xl font-bold text-white" id="metricCloudCover">45%</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Scattered stratocumulus</p>
+                    </div>
+
+                    <!-- Metric 7: Pressure -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Surface Pressure</span>
+                            <i class="fa-solid fa-compress text-indigo-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-2xl font-bold text-white" id="metricBarometer">1012</span> <span class="text-xs text-slate-400">hPa</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Steady isobaric trend</p>
+                    </div>
+
+                    <!-- Metric 8: Solar Radiation / Day -->
+                    <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                        <div class="flex items-center justify-between text-slate-400 text-xs">
+                            <span>Daylight Cycle</span>
+                            <i class="fa-regular fa-sun text-yellow-400"></i>
+                        </div>
+                        <div class="my-2">
+                            <span class="text-lg font-bold text-white" id="metricDayCycle">Daytime</span>
+                        </div>
+                        <p class="text-[10px] text-slate-400">Solar zenith active</p>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Hourly Forecast Carousel (24-Hour Slider) -->
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-simple text-cyan-400"></i> Hourly NWP Model Timeline (Next 24 Hours)
+                    </h3>
+                    <span class="text-[11px] text-slate-400">Scroll to view &rarr;</span>
+                </div>
+                <div id="hourlyForecastContainer" class="flex gap-3 overflow-x-auto pb-2 pt-1 scrollbar-none">
+                    <!-- Dynamic hourly cards loaded via JS -->
+                </div>
+            </div>
+
+            <!-- 7-Day Extended NWP Numerical Prediction -->
+            <div class="glass-panel p-5 rounded-2xl space-y-3">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <i class="fa-regular fa-calendar-days text-amber-400"></i> 7-Day Numerical Weather Prediction (GFS / ECMWF Ensemble)
+                </h3>
+                <div id="dailyForecastContainer" class="grid grid-cols-1 md:grid-cols-7 gap-2.5">
+                    <!-- Dynamic 7-day cards loaded via JS -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- TAB 3: GIS RADAR & SATELLITE WEATHER MAP -->
+        <!-- ============================================================ -->
+        <section id="gisMapTab" class="tab-pane hidden space-y-4">
+            
+            <div class="glass-panel p-4 rounded-2xl space-y-3">
+                
+                <!-- Map Controls Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            Interactive Doppler Radar & GIS Meteorological Layer
+                        </h3>
+                    </div>
+
+                    <!-- GIS Layer Switches -->
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                        <button id="layerRadarBtn" class="gis-layer-btn active px-3 py-1 rounded-lg bg-cyan-600 text-white font-medium transition">
+                            <i class="fa-solid fa-cloud-rain mr-1"></i> RainViewer Radar
+                        </button>
+                        <button id="layerStationsBtn" class="gis-layer-btn px-3 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-medium transition">
+                            <i class="fa-solid fa-tower-broadcast mr-1"></i> Weather Stations
+                        </button>
+                        <button id="resetMapCenterBtn" class="px-3 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-medium transition">
+                            <i class="fa-solid fa-crosshairs mr-1"></i> Recenter
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Leaflet Map Container -->
+                <div class="relative w-full h-[550px] rounded-xl overflow-hidden border border-slate-700/80 shadow-2xl">
+                    <div id="leafletMap" class="w-full h-full"></div>
+                    
+                    <!-- Map Legend Overlay -->
+                    <div class="absolute bottom-4 right-4 z-[1000] bg-slate-950/90 backdrop-blur-md p-2.5 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-1 shadow-lg">
+                        <div class="font-bold text-slate-200">Precipitation dBZ</div>
+                        <div class="flex items-center gap-1 h-2.5 w-36 rounded overflow-hidden">
+                            <span class="w-1/5 h-full bg-cyan-400" title="Light drizzle"></span>
+                            <span class="w-1/5 h-full bg-green-500" title="Moderate"></span>
+                            <span class="w-1/5 h-full bg-yellow-400" title="Heavy"></span>
+                            <span class="w-1/5 h-full bg-orange-500" title="Very Heavy"></span>
+                            <span class="w-1/5 h-full bg-red-600" title="Extreme / Hail"></span>
+                        </div>
+                        <div class="flex justify-between text-[9px] text-slate-400">
+                            <span>10 dBZ</span>
+                            <span>35 dBZ</span>
+                            <span>65+ dBZ</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-slate-400 flex items-center justify-between">
+                    <span>💡 Tip: Click anywhere on the map to inspect coordinates and fetch live local weather observations.</span>
+                    <span class="font-mono text-slate-500">Live Tiles: RainViewer API & OpenStreetMap CartoDB Dark</span>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- TAB 4: SECTOR-SPECIFIC DECISION SUPPORT -->
+        <!-- ============================================================ -->
+        <section id="sectorTab" class="tab-pane hidden space-y-4">
+            
+            <!-- Sector Tabs Selection -->
+            <div class="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-2">
+                <button class="sector-subtab active px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition" data-sector="agriculture">
+                    <i class="fa-solid fa-wheat-awn"></i>
+                    <span>Gramin Krishi Mausam (Agriculture)</span>
+                </button>
+                <button class="sector-subtab px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition" data-sector="marine">
+                    <i class="fa-solid fa-ship"></i>
+                    <span>Marine & Coastal Fishermen</span>
+                </button>
+                <button class="sector-subtab px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition" data-sector="aviation">
+                    <i class="fa-solid fa-plane-departure"></i>
+                    <span>Aviation Weather Briefing</span>
+                </button>
+                <button class="sector-subtab px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 bg-slate-900 text-slate-400 hover:text-white border border-slate-800 transition" data-sector="urban">
+                    <i class="fa-solid fa-city"></i>
+                    <span>Smart City & Disaster Mitigation</span>
+                </button>
+            </div>
+
+            <!-- Dynamic Sector Advisory Panel -->
+            <div id="sectorContentCard" class="glass-panel p-6 rounded-2xl space-y-6">
+                <!-- Populated dynamically via JS -->
+            </div>
+
+        </section>
+
+        <!-- ============================================================ -->
+        <!-- TAB 5: NWP MODEL COMPARISON & CLIMATE TRENDS -->
+        <!-- ============================================================ -->
+        <section id="climateTab" class="tab-pane hidden space-y-6">
+            
+            <!-- Numerical Weather Prediction (NWP) Multi-Model Chart -->
+            <div class="glass-panel p-5 rounded-2xl space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-code-compare text-cyan-400"></i> Numerical Weather Prediction (NWP) Multi-Model Comparison
+                        </h3>
+                        <p class="text-xs text-slate-400">Evaluating divergence between GFS (NOAA), ECMWF (IFS Europe), and ICON (DWD Germany)</p>
+                    </div>
+                    <span class="text-xs font-mono px-2.5 py-1 rounded bg-slate-900 border border-slate-700 text-cyan-300" id="nwpConsensusBadge">Consensus: High Agreement (±1.2°C)</span>
+                </div>
+
+                <div class="h-80 w-full">
+                    <canvas id="nwpComparisonChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Historical Climate Trends & Temperature Anomaly -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                
+                <!-- Chart 1: Decadal Temperature Anomaly -->
+                <div class="glass-panel p-5 rounded-2xl space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-temperature-arrow-up text-rose-400"></i> Decadal Temperature Anomaly (°C)
+                        </h4>
+                        <span class="text-[11px] text-slate-400">1990 - 2024</span>
+                    </div>
+                    <div class="h-64 w-full">
+                        <canvas id="tempAnomalyChart"></canvas>
+                    </div>
+                    <p class="text-[11px] text-slate-400" id="tempAnomalySummary">Warming trend observed: +1.15°C above baseline.</p>
+                </div>
+
+                <!-- Chart 2: Precipitation Variation (%) -->
+                <div class="glass-panel p-5 rounded-2xl space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-cloud-showers-water text-blue-400"></i> Annual Monsoon Rainfall Variation (%)
+                        </h4>
+                        <span class="text-[11px] text-slate-400">WMO 30-Yr Normal</span>
+                    </div>
+                    <div class="h-64 w-full">
+                        <canvas id="rainAnomalyChart"></canvas>
+                    </div>
+                    <p class="text-[11px] text-slate-400">Shift toward high-intensity short-duration monsoon cloud bursts.</p>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950/80 border-t border-slate-800/80 px-4 py-3 text-xs text-slate-500 mt-auto">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="font-bold text-slate-300">WeatherGPT AI Platform</span>
+                <span>•</span>
+                <span>Meteorological datasets: Open-Meteo & IMD/WMO Criteria</span>
+                <span>•</span>
+                <span>LLM Engine: Gemini 2.5 Flash</span>
+            </div>
+            <div class="flex items-center gap-4 text-slate-400">
+                <span id="activeLanguageIndicator"><i class="fa-solid fa-language mr-1"></i>English</span>
+                <span>•</span>
+                <span class="text-cyan-400"><i class="fa-solid fa-shield-halved mr-1"></i>Decision Support Ready</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Main JS Application Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
